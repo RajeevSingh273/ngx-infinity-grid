@@ -6,7 +6,7 @@ import {
     DefaultInfinityDataSource,
     InfinityData,
     InfinityDataSource
-} from "ng2-infinity-grid/infinity-data-source";
+} from "ng2-infinity-grid/index";
 
 class DataProvider implements InfinityDataProvider<string> {
 
