@@ -1,6 +1,45 @@
 import { Component, OnInit } from '@angular/core';
 import { NameListService } from '../shared/name-list/name-list.service';
 
+import {
+    InfinityDataProvider,
+    DefaultInfinityDataSource,
+    InfinityData,
+    InfinityDataSource
+} from "ng2-infinity-grid/infinity-data-source";
+
+class DataProvider implements InfinityDataProvider<string> {
+
+  private buffer: string[] = [];
+
+  constructor() {
+    for (let i = 0; i < 100000; i++) {
+      this.buffer[i] = 'test-' + i;
+    }
+  }
+
+  /**
+   * @override
+   */
+  public getFullSize(): number {
+    return this.buffer.length;
+  }
+
+  /**
+   * @override
+   */
+  public fetch(startIndex: number, endIndex: number): Promise<InfinityData<string>> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          fullSize: this.getFullSize(),
+          data: this.buffer.slice(startIndex, endIndex + 1)
+        });
+      }, 500);
+    });
+  }
+}
+
 /**
  * This class represents the lazy loaded HomeComponent.
  */
@@ -15,6 +54,8 @@ export class HomeComponent implements OnInit {
   newName: string = '';
   errorMessage: string;
   names: any[] = [];
+
+  private dataSource: InfinityDataSource<string> = new DefaultInfinityDataSource(new DataProvider());
 
   /**
    * Creates an instance of the HomeComponent with the injected

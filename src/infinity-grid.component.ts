@@ -4,7 +4,7 @@ import {
 	Input
 } from "@angular/core";
 
-import {InfinityDataSource} from "./infinity-data-source";
+import {InfinityDataSource} from "./infinity-data-source.service";
 
 @Component({
 	selector: 'InfinityGrid',
@@ -25,8 +25,25 @@ import {InfinityDataSource} from "./infinity-data-source";
 				</div>
 			</div>
 		`,
-	styleUrls: [
-		'./infinity-grid.component.css'
+	styles: [
+		`
+		infinitygrid {
+		    display: table;
+		    height: 100%;
+		    width: 100%;
+		    border: 1px solid #808080;
+		    cursor: default;
+		}
+		
+		.infinity-grid-header {
+		    background: linear-gradient(#fff, #d3d3d3);
+		}
+		
+		.infinity-grid-header-cell {
+		    padding: 8px;
+		    display: inline-block;
+		}
+		`
 	],
 	encapsulation: ViewEncapsulation.None,
 })
