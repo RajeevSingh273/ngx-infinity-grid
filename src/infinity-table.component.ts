@@ -5,7 +5,7 @@ import {
 	Component,
 	OnInit,
 	ViewEncapsulation,
-	Renderer
+	Renderer2
 } from "@angular/core";
 
 import {
@@ -103,7 +103,7 @@ export class InfinityTable implements OnInit {
 	private _loadTask: number;
 	private _selectedRowIndex: number;
 
-	constructor(private el: ElementRef, private renderer: Renderer) {
+	constructor(private el: ElementRef, private renderer: Renderer2) {
 	}
 
 	/**
@@ -251,12 +251,12 @@ export class InfinityTable implements OnInit {
 	}
 
 	private refreshScrollableContainerHeight(): void {
-		this.renderer.setElementStyle(this._scrollableContainer, 'height',
+		this.renderer.setStyle(this._scrollableContainer, 'height',
 			this.getScrollableContainerFullHeight() + 'px');
 
 		if (this.getScrollableContainerActualFullHeight() === 0) {
 			// Browser has been failed to set height
-			this.renderer.setElementStyle(this._scrollableContainer, 'height',
+			this.renderer.setStyle(this._scrollableContainer, 'height',
 				InfinityTable.MAX_HEIGHT_BY_BROWSER_RESTRICTION + 'px');
 
 			console.debug('[$InfinityTable] Browser has been failed to set height');
