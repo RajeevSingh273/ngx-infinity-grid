@@ -179,3 +179,5 @@ export class InfinityTable implements OnInit {
 		this.launchUpdateView();
 	}
 }
+
+declare function setTimeout(callback: (...args: any[]) => void, ms: number, ...args: any[]): number;
