@@ -2,6 +2,10 @@
 
 An implementation of infinity grid at Angular2 [4.x compatible].
 
+## Demo
+
+[This is demo](https://apoterenko.github.io/ng2-infinity-grid)
+
 ## Description
 
 TODO
