@@ -15,7 +15,7 @@ export interface InfinityDataSource<T> {
 }
 
 interface IDataSourceRowFactory<T> {
-	getInstance(index: number): IDataSourceRow<T>;
+	getInstance(index: number, firstIndex: number): IDataSourceRow<T>;
 }
 
 export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
@@ -153,7 +153,8 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 			this._startIndex,
 			this._endIndex,
 			{
-				getInstance: (index: number) => new DataSourceRow(index, this._dataBuffer[index])
+				getInstance: (index: number, firstIndex: number) =>
+					new DataSourceRow(index, firstIndex, this._dataBuffer[index])
 			}
 		);
 	}
@@ -161,9 +162,12 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 
 class DefaultIterator<T> implements Iterator<IDataSourceRow<T>> {
 
+	private _initialStartPosition: number;
+
 	constructor(private startPosition: number,
 	            private endPosition: number,
 	            private iteratorResultItemFactory: IDataSourceRowFactory<T>) {
+		this._initialStartPosition = startPosition;
 	}
 
 	/**
@@ -179,19 +183,20 @@ class DefaultIterator<T> implements Iterator<IDataSourceRow<T>> {
 
 		return {
 			done: done,
-			value: this.iteratorResultItemFactory.getInstance(currentIndex)
+			value: this.iteratorResultItemFactory.getInstance(currentIndex, this._initialStartPosition)
 		}
 	}
 }
 
 export interface IDataSourceRow<T> {
 	getPosition(): number;
+	getFirstPosition(): number;
 	getValue(): T;
 }
 
 class DataSourceRow<T> implements IDataSourceRow<T> {
 
-	constructor(private index: number, private value: T) {
+	constructor(private index: number, private firstIndex: number, private value: T) {
 	}
 
 	/**
@@ -199,6 +204,13 @@ class DataSourceRow<T> implements IDataSourceRow<T> {
 	 */
 	public getPosition(): number {
 		return this.index;
+	}
+
+	/**
+	 * @override
+	 */
+	public getFirstPosition(): number {
+		return this.firstIndex;
 	}
 
 	/**
