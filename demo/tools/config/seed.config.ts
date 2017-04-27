@@ -95,7 +95,7 @@ export class SeedConfig {
    * which can be overriden by the `--base` flag when running `npm start`.
    * @type {string}
    */
-  APP_BASE = argv['base'] || '/';
+  APP_BASE = '/ng2-infinity-grid/';
 
   /**
    * The base path of node modules.
@@ -150,7 +150,7 @@ export class SeedConfig {
    * Tracking ID.
    * @type {string}
    */
-  GOOGLE_ANALYTICS_ID = 'UA-XXXXXXXX-X';
+  GOOGLE_ANALYTICS_ID = 'UA-72031769-10';
 
   /**
    * The base folder of the applications source files.
