@@ -115,6 +115,8 @@ export class InfinityTable implements OnInit {
 		// Determining of a row height automatically
 		const nullRow: HTMLElement = _scrollableContainer.children[0] as HTMLElement;
 		this._rowHeight = nullRow.clientHeight;
+
+		console.debug('[$InfinityTable] The row height has been calculated automatically:', this._rowHeight);
 	}
 
 	/**
@@ -162,10 +164,13 @@ export class InfinityTable implements OnInit {
 	 * @template
 	 */
 	protected getScrollableContainerFullHeight(): number {
-		return Math.max(
+		const result: number = Math.max(
 			this.dataSource.getFullSize() * this._rowHeight,
 			this.getScrollableContainerWrapperFullHeight()
 		);
+
+		console.debug('[$InfinityTable] The container height has been calculated automatically:', result);
+		return result;
 	}
 
 	protected getStartEndIndexes(): number[] {
