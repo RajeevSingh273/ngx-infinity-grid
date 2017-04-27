@@ -18,7 +18,7 @@ interface IDataSourceRowFactory<T> {
 	getInstance(index: number): IDataSourceRow<T>;
 }
 
-export class DefaultInfinityDataSource implements InfinityDataSource<string> {
+export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 
 	/**
 	 * ES6 iterators compatibility
@@ -26,12 +26,14 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 	 */
 	[Symbol.iterator] = this.iterator();
 
-	private _dataBuffer: string[];
+	private _dataBuffer: T[];
 	private _ready: boolean = false;
 	private _startIndex: number = 0;
 	private _endIndex: number = 0;
+	private _fetchedStartIndex: number = 0;
+	private _fetchedEndIndex: number = 0;
 
-	constructor(private _dataProvider: InfinityDataProvider<string>) {
+	constructor(private _dataProvider: InfinityDataProvider<T>) {
 	}
 
 	/**
@@ -51,7 +53,7 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 	/**
 	 * @override
 	 */
-	public iterator(): ()=>Iterator<IDataSourceRow<string>> {
+	public iterator(): ()=>Iterator<IDataSourceRow<T>> {
 		return () => this.getIteratorInstance();
 	}
 
@@ -59,33 +61,58 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 	 * @override
 	 */
 	public fetch(startIndex: number, endIndex: number) {
-		if (this.isFetched(startIndex, endIndex)) {
-			this._startIndex = startIndex;
-			this._endIndex = endIndex;
+		this.updateStateBeforeFetch(startIndex, endIndex);
 
-			console.debug('[$DefaultInfinityDataSource] The data have been fetched from cache. Start index is',
-				startIndex, ', end index is', endIndex, ', the fetched data size is', this.getFetchedDataSize());
+		if (this.isFetched(startIndex, endIndex)) {
+			this.commitStateAfterFetch(startIndex, endIndex);
 			return;
 		}
 
-		this._ready = false;
-
 		this._dataProvider.fetch(startIndex, endIndex)
-			.then((infinityData: InfinityData<string>) => {
-				if (!this._dataBuffer) {
-					this._dataBuffer = new Array<string>(infinityData.fullSize);
-				}
+			.then((infinityData: InfinityData<T>) => this.onFetch(startIndex, endIndex, infinityData));
+	}
 
-				let currentIndex: number = startIndex;
-				infinityData.data.forEach((value: string) => this._dataBuffer[currentIndex++] = value);
+	private onFetch(startIndex: number, endIndex: number, infinityData: InfinityData<T>) {
+		const infinityFullSize: number = infinityData.fullSize;
 
-				this._startIndex = startIndex;
-				this._endIndex = endIndex;
-				this._ready = true;
+		if (!this._dataBuffer) {
+			this._dataBuffer = new Array<T>(infinityFullSize);
+		} else if (infinityFullSize !== this._dataBuffer.length) {
+			const dataBufferLength: number = this._dataBuffer.length;
 
-				console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
-					startIndex, ', end index is', endIndex, ', the fetched data size is', this.getFetchedDataSize());
-			});
+			if (infinityFullSize > dataBufferLength) {
+				// Extend infinity buffer in runtime
+				this._dataBuffer = this._dataBuffer.concat(new Array<T>(infinityFullSize - dataBufferLength));
+			} else {
+				this._dataBuffer = this._dataBuffer.slice(0, infinityFullSize);
+			}
+		}
+
+		let currentIndex: number = startIndex;
+		infinityData.data.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
+
+		if (this._fetchedStartIndex === startIndex && this._fetchedEndIndex === endIndex) {
+			// The promise is not cancellable
+			// https://github.com/tc39/proposal-cancelable-promises
+			// We should check the current and previous indexes
+
+			this.commitStateAfterFetch(startIndex, endIndex);
+		}
+	}
+
+	private updateStateBeforeFetch(startIndex: number, endIndex: number) {
+		this._ready = false;
+		this._fetchedStartIndex = startIndex;
+		this._fetchedEndIndex = endIndex;
+	}
+
+	private commitStateAfterFetch(startIndex: number, endIndex: number) {
+		this._startIndex = startIndex;
+		this._endIndex = endIndex;
+		this._ready = true;
+
+		console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
+			startIndex, ', end index is', endIndex, ', the fetched data size is', this.getFetchedDataSize());
 	}
 
 	/**
@@ -107,13 +134,13 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 		if (!this._dataBuffer) {
 			return 0;
 		}
-		return this._dataBuffer.filter((value: string) => typeof value !== 'undefined').length;
+		return this._dataBuffer.filter((value: T) => typeof value !== 'undefined').length;
 	}
 
-	private getIteratorInstance(): Iterator<IDataSourceRow<string>> {
+	private getIteratorInstance(): Iterator<IDataSourceRow<T>> {
 		if (!this._dataBuffer) {
 			return {
-				next(): IteratorResult<IDataSourceRow<string>> {
+				next(): IteratorResult<IDataSourceRow<T>> {
 					return {
 						done: true,
 						value: null
@@ -122,7 +149,7 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 			};
 		}
 
-		return new DefaultIterator<string>(
+		return new DefaultIterator<T>(
 			this._startIndex,
 			this._endIndex,
 			{

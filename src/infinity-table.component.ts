@@ -164,13 +164,10 @@ export class InfinityTable implements OnInit {
 	 * @template
 	 */
 	protected getScrollableContainerFullHeight(): number {
-		const result: number = Math.max(
+		return Math.max(
 			this.dataSource.getFullSize() * this._rowHeight,
 			this.getScrollableContainerWrapperFullHeight()
 		);
-
-		console.debug('[$InfinityTable] The container height has been calculated automatically:', result);
-		return result;
 	}
 
 	protected getStartEndIndexes(): number[] {
@@ -203,10 +200,11 @@ export class InfinityTable implements OnInit {
 		}
 
 		this._loadTask = setTimeout(() => {
-			this._loadTask = null;
 			this.applyDataSourcePage();
 
 			console.debug('[$InfinityTable] The data source page has been applied');
+
+			this._loadTask = null;
 		}, this.delayOnChangeViewState);
 	}
 
