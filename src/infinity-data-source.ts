@@ -1,7 +1,17 @@
+export interface InfinityData<T> {
+	fullSize: number;
+	data: T[];
+}
+
+export interface InfinityDataProvider<T> {
+	fetch(startIndex: number, endIndex: number): Promise<InfinityData<T>>;
+}
+
 export interface InfinityDataSource<T> {
-	getLength(): number;
+	getFullSize(): number;
 	isReady(): boolean;
-	applyRange(start: number, end: number);
+	isFetched(startIndex: number, endIndex: number): boolean;
+	fetch(startIndex: number, endIndex: number);
 }
 
 interface IDataSourceRowFactory<T> {
@@ -16,33 +26,26 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 	 */
 	[Symbol.iterator] = this.iterator();
 
-	private records: string[] = [];
+	private _dataBuffer: string[];
+	private _ready: boolean = false;
+	private _startIndex: number = 0;
+	private _endIndex: number = 0;
 
-	constructor(private ready: boolean = true,
-	            private start: number = 0,
-	            private end: number = 0) {
-
-		for (let i = 0; i < 100000; i++) {
-			this.records[i] = 'test-' + i;
-		}
-
-		setTimeout(() => {
-			this.records[2] = 'updated-test-';
-		}, 2000);
+	constructor(private _dataProvider: InfinityDataProvider<string>) {
 	}
 
 	/**
 	 * @override
 	 */
 	public isReady(): boolean {
-		return this.ready;
+		return this._ready;
 	}
 
 	/**
 	 * @override
 	 */
-	public getLength(): number {
-		return this.records.length;
+	public getFullSize(): number {
+		return this._dataBuffer ? this._dataBuffer.length : 0;
 	}
 
 	/**
@@ -55,21 +58,77 @@ export class DefaultInfinityDataSource implements InfinityDataSource<string> {
 	/**
 	 * @override
 	 */
-	public applyRange(start: number, end: number) {
-		this.ready = false;
+	public fetch(startIndex: number, endIndex: number) {
+		if (this.isFetched(startIndex, endIndex)) {
+			this._startIndex = startIndex;
+			this._endIndex = endIndex;
 
-		setTimeout(() => {
-			this.start = start;
-			this.end = end;
+			console.debug('[$DefaultInfinityDataSource] The data have been fetched from cache. Start index is',
+				startIndex, ', end index is', endIndex, ', the fetched data size is', this.getFetchedDataSize());
+			return;
+		}
 
-			this.ready = true;
-		}, 500)
+		this._ready = false;
+
+		this._dataProvider.fetch(startIndex, endIndex)
+			.then((infinityData: InfinityData<string>) => {
+				if (!this._dataBuffer) {
+					this._dataBuffer = new Array<string>(infinityData.fullSize);
+				}
+
+				let currentIndex: number = startIndex;
+				infinityData.data.forEach((value: string) => this._dataBuffer[currentIndex++] = value);
+
+				this._startIndex = startIndex;
+				this._endIndex = endIndex;
+				this._ready = true;
+
+				console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
+					startIndex, ', end index is', endIndex, ', the fetched data size is', this.getFetchedDataSize());
+			});
+	}
+
+	/**
+	 * @override
+	 */
+	public isFetched(startIndex: number, endIndex: number): boolean {
+		if (!this._dataBuffer) {
+			return false;
+		}
+
+		let isFilled: boolean = true;
+		for (let index: number = startIndex; index <= endIndex; index++) {
+			isFilled = isFilled && typeof this._dataBuffer[index] !== 'undefined';
+		}
+		return isFilled;
+	}
+
+	private getFetchedDataSize(): number {
+		if (!this._dataBuffer) {
+			return 0;
+		}
+		return this._dataBuffer.filter((value: string) => typeof value !== 'undefined').length;
 	}
 
 	private getIteratorInstance(): Iterator<IDataSourceRow<string>> {
-		return new DefaultIterator<string>(this.start, this.end, {
-			getInstance: (index: number) => new DataSourceRow(index, this.records[index])
-		});
+		if (!this._dataBuffer) {
+			return {
+				next(): IteratorResult<IDataSourceRow<string>> {
+					return {
+						done: true,
+						value: null
+					}
+				}
+			};
+		}
+
+		return new DefaultIterator<string>(
+			this._startIndex,
+			this._endIndex,
+			{
+				getInstance: (index: number) => new DataSourceRow(index, this._dataBuffer[index])
+			}
+		);
 	}
 }
 

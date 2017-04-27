@@ -3,7 +3,6 @@ import {
 	Input,
 	HostListener,
 	Component,
-	Renderer,
 	OnInit,
 	ViewEncapsulation
 } from "@angular/core";
@@ -16,19 +15,20 @@ import {
 @Component({
 	selector: 'InfinityTable',
 	template: `
-			<div class="infinity-table-container">
-				<div class="infinity-table-row infinity-table-null-row">
-					<div class="infinity-table-cell" style="width: 100px;">&nbsp;</div>
-				</div>
-				<div class="infinity-table-row"
-					*ngFor="let item of dataSource" 
-					(click)="onRowClick(item)"
-					[ngClass]="{selected: isRowSelected(item)}"
-					[ngStyle]="{top: toTopItem(item.getPosition()) + 'px', visibility: isContainerReady() ? 'visible' : 'hidden'}">
-						<div class="infinity-table-cell" style="width: 100px;">
-							{{ item.getValue() }}
-						</div>
-				</div>
+			<div class="infinity-table-container"
+				[ngStyle]="{height: getScrollableContainerFullHeight() + 'px'}">
+					<div class="infinity-table-row infinity-table-null-row">
+						<div class="infinity-table-cell" style="width: 100px;">&nbsp;</div>
+					</div>
+					<div class="infinity-table-row"
+						*ngFor="let item of dataSource" 
+						(click)="onRowClick(item)"
+						[ngClass]="{selected: isRowSelected(item)}"
+						[ngStyle]="{top: toTopItem(item.getPosition()) + 'px', visibility: isContainerReady() ? 'visible' : 'hidden'}">
+							<div class="infinity-table-cell" style="width: 100px;">
+								{{ item.getValue() }}
+							</div>
+					</div>
 			</div>
 			<div class="infinity-table-progressbar"
 				[ngStyle]="{display: isContainerReady() ? 'none' : 'block'}">
@@ -45,7 +45,6 @@ export class InfinityTable implements OnInit {
 	@Input() dataSource: InfinityDataSource<any>;
 	@Input() loadingMessage: string;
 	@Input() preventLoadPageAfterViewInit: boolean;
-	@Input() debugModeDisabled: boolean;
 	@Input() delayOnChangeViewState: number;
 
 	private _scrollableContainerWrapper: HTMLElement;
@@ -53,7 +52,7 @@ export class InfinityTable implements OnInit {
 	private _loadTask: number;
 	private _selectedRowIndex: number;
 
-	constructor(private el: ElementRef, private renderer: Renderer) {
+	constructor(private el: ElementRef) {
 	}
 
 	/**
@@ -62,7 +61,6 @@ export class InfinityTable implements OnInit {
 	public ngOnInit() {
 		this.delayOnChangeViewState = this.delayOnChangeViewState || 100;
 		this.loadingMessage = this.loadingMessage || 'Loading...';
-		this.debugModeDisabled = this.debugModeDisabled || false;
 		this.preventLoadPageAfterViewInit = this.preventLoadPageAfterViewInit || false;
 
 		this._scrollableContainerWrapper = this.el.nativeElement;
@@ -71,8 +69,6 @@ export class InfinityTable implements OnInit {
 		// Determining of a row height automatically
 		const nullRow: HTMLElement = _scrollableContainer.children[0] as HTMLElement;
 		this._rowHeight = nullRow.clientHeight;
-
-		this.renderer.setElementStyle(_scrollableContainer, 'height', this.getScrollableContainerFullHeight() + 'px');
 	}
 
 	/**
@@ -112,44 +108,65 @@ export class InfinityTable implements OnInit {
 		return this._rowHeight * position;
 	}
 
+	protected getScrollableContainerWrapperFullHeight(): number {
+		return this._scrollableContainerWrapper.clientHeight;
+	}
+
+	/**
+	 * @template
+	 */
 	protected getScrollableContainerFullHeight(): number {
-		return this.dataSource.getLength() * this._rowHeight;
+		return Math.max(
+			this.dataSource.getFullSize() * this._rowHeight,
+			this.getScrollableContainerWrapperFullHeight()
+		);
 	}
 
 	protected getStartEndIndexes(): number[] {
-		const position = this._scrollableContainerWrapper.scrollTop;
-		const reserveSize: number = 0;
+		const position: number = this._scrollableContainerWrapper.scrollTop;
 
-		let startIndex = Math.floor(position / this._rowHeight);
-		let endIndex = Math.floor((position + this._scrollableContainerWrapper.clientHeight) / this._rowHeight);
+		let startIndex: number = Math.floor(position / this._rowHeight);
+		let endIndex: number = Math.floor((position + this.getScrollableContainerWrapperFullHeight()) / this._rowHeight);
 
-		startIndex = Math.max(startIndex - reserveSize, 0);
-		endIndex = Math.min(endIndex + reserveSize, this.dataSource.getLength() - 1);
-
-		if (!this.debugModeDisabled) {
-			console.debug('[$InfinityComponent] Start index is', startIndex, ', end index is', endIndex);
+		const dataSourceFullSize: number = this.dataSource.getFullSize();
+		if (dataSourceFullSize > 0) {
+			endIndex = Math.min(endIndex, dataSourceFullSize - 1);
 		}
+
+		console.debug('[$InfinityTable] Start index is', startIndex, ', end index is', endIndex);
+
 		return [startIndex, endIndex];
 	}
 
 	private launchUpdateView() {
 		if (this._loadTask) {
 			clearTimeout(this._loadTask);
+			this._loadTask = null;
+		}
+
+		if (this.isDataSourcePageReady()) {
+			this.applyDataSourcePage();
+
+			console.debug('[$InfinityTable] The data source page has been applied immediately');
+			return;
 		}
 
 		this._loadTask = setTimeout(() => {
 			this._loadTask = null;
 			this.applyDataSourcePage();
 
-			if (!this.debugModeDisabled) {
-				console.debug('[$InfinityComponent] A new data source page has been applied');
-			}
+			console.debug('[$InfinityTable] The data source page has been applied');
 		}, this.delayOnChangeViewState);
+	}
+
+	private isDataSourcePageReady(): boolean {
+		const indexes: number[] = this.getStartEndIndexes();
+		return this.dataSource.isFetched(indexes[0], indexes[1]);
 	}
 
 	private applyDataSourcePage() {
 		const indexes: number[] = this.getStartEndIndexes();
-		this.dataSource.applyRange(indexes[0], indexes[1]);
+		this.dataSource.fetch(indexes[0], indexes[1]);
 	}
 
 	@HostListener('scroll')
@@ -162,5 +179,3 @@ export class InfinityTable implements OnInit {
 		this.launchUpdateView();
 	}
 }
-
-declare function setTimeout(callback: (...args: any[]) => void, ms: number, ...args: any[]): number;

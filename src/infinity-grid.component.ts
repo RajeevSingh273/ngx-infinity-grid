@@ -1,7 +1,7 @@
 import {
+	ViewEncapsulation,
 	Component,
-	Input,
-	ViewEncapsulation
+	Input
 } from "@angular/core";
 
 import {InfinityDataSource} from "./infinity-data-source";
