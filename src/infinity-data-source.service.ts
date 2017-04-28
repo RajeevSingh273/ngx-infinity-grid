@@ -10,7 +10,7 @@ export interface InfinityDataProvider<T> {
 export interface InfinityDataSource<T> {
 	getFullSize(): number;
 	isFetched(startIndex: number, endIndex: number): boolean;
-	fetch(startIndex: number, endIndex: number);
+	fetch(startIndex: number, endIndex: number): Promise<void>;
 }
 
 interface IDataSourceRowFactory<T> {
@@ -49,7 +49,7 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 	/**
 	 * @override
 	 */
-	public fetch(startIndex: number, endIndex: number) {
+	public fetch(startIndex: number, endIndex: number): Promise<void> {
 		this._startIndex = startIndex;
 		this._endIndex = endIndex;
 
@@ -57,10 +57,10 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 			startIndex, ', end index is', endIndex);
 
 		if (this.isFetched(startIndex, endIndex)) {
-			return;
+			return Promise.resolve();
 		}
 
-		this._dataProvider.fetch(startIndex, endIndex)
+		return this._dataProvider.fetch(startIndex, endIndex)
 			.then((infinityData: InfinityData<T>) => this.onFetch(startIndex, endIndex, infinityData));
 	}
 

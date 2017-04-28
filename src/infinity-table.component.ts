@@ -80,7 +80,9 @@ export class InfinityTable implements OnInit {
 
 	private static SOUTH_PAGE_ZONE_SIZE: number = 1;
 	private static NORTH_PAGE_ZONE_SIZE: number = 1;
-	private static MAX_HEIGHT_BY_BROWSER_RESTRICTION: number = 1533729;
+
+	// http://stackoverflow.com/questions/28260889/set-large-value-to-divs-height
+	private static MAX_HEIGHTS_BY_BROWSER_RESTRICTION: number[] = [20000000, 17895696, 1533917];
 
 	@Input() dataSource: InfinityDataSource<any>;
 	@Input() loadingMessage: string;
@@ -90,8 +92,11 @@ export class InfinityTable implements OnInit {
 	private _scrollableContainerWrapper: HTMLElement;
 	private _scrollableContainer: HTMLElement;
 	private _rowHeight: number;
+	private _adjustedRowHeight: number;                     // Cached for optimization
+	private _adjustedRowHeightFactor: number;               // Cached for optimization
 	private _loadTask: number;
 	private _selectedRowIndex: number;
+	private _needAdjustScrollableContainerHeight: boolean;  // Cached for optimization
 
 	constructor(private el: ElementRef, private renderer: Renderer2) {
 	}
@@ -107,11 +112,11 @@ export class InfinityTable implements OnInit {
 		this._scrollableContainerWrapper = this.el.nativeElement;
 		this._scrollableContainer = this.el.nativeElement.children[0] as HTMLElement;
 
-		this.refreshScrollableContainerHeight();
-
 		// Determining of a row height automatically
 		const nullRow: HTMLElement = this._scrollableContainer.children[0] as HTMLElement;
 		this._rowHeight = nullRow.clientHeight;
+
+		this.refreshScrollableContainerHeight();
 
 		console.debug('[$InfinityTable] The row height has been calculated automatically:', this._rowHeight);
 	}
@@ -143,7 +148,8 @@ export class InfinityTable implements OnInit {
 	 * @template
 	 */
 	private buildTopItem(item: IDataSourceRow<any>) {
-		if (this.getDataSourceFullSize() === item.getFirstPosition() + this.getPageSize()) {
+		if (this._needAdjustScrollableContainerHeight &&
+			this.getDataSourceFullSize() === item.getFirstPosition() + this.getPageSize()) {
 			// Adjust top height because the last page
 			return this.getScrollableContainerActualFullHeight() -
 				this._rowHeight * (this.getDataSourceFullSize() - item.getPosition());
@@ -166,7 +172,8 @@ export class InfinityTable implements OnInit {
 			endIndex = Math.min(endIndex, lastDataSourceIndex);
 		}
 
-		if (scrollPosition > 0
+		if (this._needAdjustScrollableContainerHeight
+			&& scrollPosition > 0
 			&& this.getScrollableContainerActualFullHeight() - scrollPosition === this.getScrollableContainerWrapperFullHeight()) {
 
 			/**
@@ -215,14 +222,18 @@ export class InfinityTable implements OnInit {
 	}
 
 	private getAdjustedRowHeight(): number {
-		return this._rowHeight * this.getAdjustedRowHeightFactor();
+		return this._adjustedRowHeight = this._adjustedRowHeight
+			|| this._rowHeight * this.getAdjustedRowHeightFactor(); // _rowHeight is immutable
 	}
 
 	/**
 	 * http://stackoverflow.com/questions/7719273/determine-maximum-possible-div-height
 	 */
 	private getAdjustedRowHeightFactor(): number {
-		return this.getScrollableContainerActualFullHeight() / this.getScrollableContainerFullHeight();
+		return this._needAdjustScrollableContainerHeight
+			? this._adjustedRowHeightFactor = this._adjustedRowHeightFactor
+				|| (this.getScrollableContainerActualFullHeight() / this.getScrollableContainerFullHeight())
+			: 1;    // For optimization
 	}
 
 	private getScrollableContainerActualFullHeight(): number {
@@ -234,15 +245,35 @@ export class InfinityTable implements OnInit {
 	}
 
 	private refreshScrollableContainerHeight(): void {
+		this._adjustedRowHeight = null;                         // reset the cached value
+		this._adjustedRowHeightFactor = null;                   // reset the cached value
+		this._needAdjustScrollableContainerHeight = false;      // reset the cached value
+
+		const scrollableContainerFullHeight: number = this.getScrollableContainerFullHeight();
+
 		this.renderer.setStyle(this._scrollableContainer, 'height',
 			this.getScrollableContainerFullHeight() + 'px');
 
 		if (this.getScrollableContainerActualFullHeight() === 0) {
 			// Browser has been failed to set height
-			this.renderer.setStyle(this._scrollableContainer, 'height',
-				InfinityTable.MAX_HEIGHT_BY_BROWSER_RESTRICTION + 'px');
+			// Trying to set most large height
+			this._needAdjustScrollableContainerHeight = true;
 
-			console.debug('[$InfinityTable] Browser has been failed to set height');
+			console.debug('[$InfinityTable] Browser has been failed to set height', scrollableContainerFullHeight);
+
+			for (let restrictionHeight of InfinityTable.MAX_HEIGHTS_BY_BROWSER_RESTRICTION) {
+				this.renderer.setStyle(this._scrollableContainer, 'height',
+					restrictionHeight + 'px');
+
+				if (this.getScrollableContainerActualFullHeight() === 0) {
+					console.debug('[$InfinityTable] Browser has been failed to set restriction height', restrictionHeight);
+				} else {
+					console.debug('[$InfinityTable] Browser has been succeeded to set restriction height', restrictionHeight);
+					break;
+				}
+			}
+		} else {
+			console.debug('[$InfinityTable] Browser has been succeeded to set height', scrollableContainerFullHeight);
 		}
 	}
 
@@ -261,9 +292,11 @@ export class InfinityTable implements OnInit {
 		return this.dataSource.isFetched(indexes[0], indexes[1]);
 	}
 
-	private applyDataSourcePage() {
+	private applyDataSourcePage(): Promise<void> {
 		const indexes: number[] = this.getStartEndIndexes();
-		this.dataSource.fetch(indexes[0], indexes[1]);
+
+		return this.dataSource.fetch(indexes[0], indexes[1])
+			.then(() => this.refreshScrollableContainerHeight());
 	}
 
 	@HostListener('scroll')
