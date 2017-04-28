@@ -5,7 +5,8 @@ import {
     InfinityDataProvider,
     DefaultInfinityDataSource,
     InfinityData,
-    InfinityDataSource
+    InfinityDataSource,
+    InfinityDataSourceFactory
 } from "ng2-infinity-grid/index";
 
 class DataProvider implements InfinityDataProvider<string> {
@@ -54,8 +55,7 @@ export class HomeComponent implements OnInit {
   newName: string = '';
   errorMessage: string;
   names: any[] = [];
-
-  private dataSource: InfinityDataSource<string> = new DefaultInfinityDataSource(new DataProvider());
+  dataSource: InfinityDataSource<string>;
 
   /**
    * Creates an instance of the HomeComponent with the injected
@@ -63,7 +63,10 @@ export class HomeComponent implements OnInit {
    *
    * @param {NameListService} nameListService - The injected NameListService.
    */
-  constructor(public nameListService: NameListService) {}
+  constructor(public nameListService: NameListService,
+              infinityDataSourceFactory: InfinityDataSourceFactory) {
+    this.dataSource = infinityDataSourceFactory.getInstance(new DataProvider());
+  }
 
   /**
    * Get the names OnInit
