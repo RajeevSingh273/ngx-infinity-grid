@@ -1,3 +1,10 @@
+import {
+	Injectable,
+	Inject
+} from "@angular/core";
+
+import {INFINITY_GRID_DEBUG_ENABLED} from "./infinity-grid.settings";
+
 export interface InfinityData<T> {
 	fullSize: number;
 	data: T[];
@@ -17,6 +24,32 @@ interface IDataSourceRowFactory<T> {
 	getInstance(index: number, firstIndex: number): IDataSourceRow<T>;
 }
 
+export interface IInfinityDataSourceFactory {
+	getInstance<T>(_dataProvider: InfinityDataProvider<T>): InfinityDataSource<T>;
+}
+
+export abstract class InfinityDataSourceFactory implements IInfinityDataSourceFactory {
+	abstract getInstance<T>(_dataProvider: InfinityDataProvider<T>): InfinityDataSource<T>;
+}
+
+@Injectable()
+export class DefaultInfinityDataSourceFactory extends InfinityDataSourceFactory {
+
+	constructor(@Inject(INFINITY_GRID_DEBUG_ENABLED) private debugEnabled: boolean) {
+		super();
+	}
+
+	/**
+	 * @override
+	 */
+	public getInstance<T>(_dataProvider: InfinityDataProvider<T>): InfinityDataSource<T> {
+		return new DefaultInfinityDataSource<T>(
+			_dataProvider,
+			this.debugEnabled
+		);
+	}
+}
+
 export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 
 	/**
@@ -29,7 +62,8 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 	private _startIndex: number = 0;
 	private _endIndex: number = 0;
 
-	constructor(private _dataProvider: InfinityDataProvider<T>) {
+	constructor(private _dataProvider: InfinityDataProvider<T>,
+	            private debugEnabled: boolean) {
 	}
 
 	/**
@@ -53,8 +87,10 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 		this._startIndex = startIndex;
 		this._endIndex = endIndex;
 
-		console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
-			startIndex, ', end index is', endIndex);
+		if (this.debugEnabled) {
+			console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
+				startIndex, ', end index is', endIndex);
+		}
 
 		if (this.isFetched(startIndex, endIndex)) {
 			return Promise.resolve();
@@ -83,8 +119,10 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 		let currentIndex: number = startIndex;
 		infinityData.data.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
 
-		console.debug('[$DefaultInfinityDataSource] The data have been fetched. The current data size snapshot is',
-			this.getFetchedDataSize());
+		if (this.debugEnabled) {
+			console.debug('[$DefaultInfinityDataSource] The data have been fetched. The current data size snapshot is',
+				this.getFetchedDataSize());
+		}
 	}
 
 	/**
