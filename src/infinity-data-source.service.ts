@@ -9,7 +9,6 @@ export interface InfinityDataProvider<T> {
 
 export interface InfinityDataSource<T> {
 	getFullSize(): number;
-	isReady(): boolean;
 	isFetched(startIndex: number, endIndex: number): boolean;
 	fetch(startIndex: number, endIndex: number);
 }
@@ -27,20 +26,10 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 	[Symbol.iterator] = this.iterator();
 
 	private _dataBuffer: T[];
-	private _ready: boolean = false;
 	private _startIndex: number = 0;
 	private _endIndex: number = 0;
-	private _fetchedStartIndex: number = 0;
-	private _fetchedEndIndex: number = 0;
 
 	constructor(private _dataProvider: InfinityDataProvider<T>) {
-	}
-
-	/**
-	 * @override
-	 */
-	public isReady(): boolean {
-		return this._ready;
 	}
 
 	/**
@@ -61,10 +50,13 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 	 * @override
 	 */
 	public fetch(startIndex: number, endIndex: number) {
-		this.updateStateBeforeFetch(startIndex, endIndex);
+		this._startIndex = startIndex;
+		this._endIndex = endIndex;
+
+		console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
+			startIndex, ', end index is', endIndex);
 
 		if (this.isFetched(startIndex, endIndex)) {
-			this.commitStateAfterFetch(startIndex, endIndex);
 			return;
 		}
 
@@ -91,28 +83,8 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 		let currentIndex: number = startIndex;
 		infinityData.data.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
 
-		if (this._fetchedStartIndex === startIndex && this._fetchedEndIndex === endIndex) {
-			// The promise is not cancellable
-			// https://github.com/tc39/proposal-cancelable-promises
-			// We should check the current and previous indexes
-
-			this.commitStateAfterFetch(startIndex, endIndex);
-		}
-	}
-
-	private updateStateBeforeFetch(startIndex: number, endIndex: number) {
-		this._ready = false;
-		this._fetchedStartIndex = startIndex;
-		this._fetchedEndIndex = endIndex;
-	}
-
-	private commitStateAfterFetch(startIndex: number, endIndex: number) {
-		this._startIndex = startIndex;
-		this._endIndex = endIndex;
-		this._ready = true;
-
-		console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
-			startIndex, ', end index is', endIndex, ', the fetched data size is', this.getFetchedDataSize());
+		console.debug('[$DefaultInfinityDataSource] The data have been fetched. The current data size snapshot is',
+			this.getFetchedDataSize());
 	}
 
 	/**
@@ -192,6 +164,7 @@ export interface IDataSourceRow<T> {
 	getPosition(): number;
 	getFirstPosition(): number;
 	getValue(): T;
+	hasValue(): boolean;
 }
 
 class DataSourceRow<T> implements IDataSourceRow<T> {
@@ -218,5 +191,12 @@ class DataSourceRow<T> implements IDataSourceRow<T> {
 	 */
 	public getValue(): T {
 		return this.value;
+	}
+
+	/**
+	 * @override
+	 */
+	public hasValue(): boolean {
+		return typeof this.value !== 'undefined';
 	}
 }

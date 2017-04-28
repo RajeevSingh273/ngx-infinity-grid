@@ -24,15 +24,16 @@ import {
 					*ngFor="let item of dataSource" 
 					(click)="onRowClick(item)"
 					[ngClass]="{selected: isRowSelected(item)}"
-					[ngStyle]="{top: buildTopItem(item) + 'px', visibility: isContainerReady() ? 'visible' : 'hidden'}">
+					[ngStyle]="{top: buildTopItem(item) + 'px'}">
 						<div class="infinity-table-cell" style="width: 100px;">
-							{{ item.getValue() }}
+							<template [ngIf]="item.hasValue()">
+								{{ item.getValue() }}
+							</template>
+							<template [ngIf]="!item.hasValue()">
+								<span class="infinity-table-cell-loading">{{ loadingMessage }}</span>
+							</template>
 						</div>
 				</div>
-			</div>
-			<div class="infinity-table-progressbar"
-				[ngStyle]="{display: isContainerReady() ? 'none' : 'block'}">
-					<div class="infinity-table-progressbar-inner">{{ loadingMessage }}</div>
 			</div>
 		`,
 	styles: [
@@ -70,17 +71,6 @@ import {
 			    border-top: 1px transparent;
 			    border-bottom: 1px transparent;
 			    padding: 4px;
-			}
-			
-			.infinity-table-progressbar {
-			    position: absolute;
-			    left: 50%;
-			    top: 50%;
-			}
-			
-			.infinity-table-progressbar .infinity-table-progressbar-inner {
-			    position: relative;
-			    left: -50%;
 			}
 		`
 	],
@@ -147,13 +137,6 @@ export class InfinityTable implements OnInit {
 	 */
 	private isRowSelected(item: IDataSourceRow<any>) {
 		return item.getPosition() === this._selectedRowIndex;
-	}
-
-	/**
-	 * @template
-	 */
-	private isContainerReady(): boolean {
-		return this.dataSource.isReady() && !this._loadTask;
 	}
 
 	/**
