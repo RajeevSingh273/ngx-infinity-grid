@@ -26,12 +26,12 @@ import {
 					[ngClass]="{selected: isRowSelected(item)}"
 					[ngStyle]="{top: buildTopItem(item) + 'px'}">
 						<div class="infinity-table-cell" style="width: 100px;">
-							<template [ngIf]="item.hasValue()">
+							<ng-template [ngIf]="item.hasValue()">
 								{{ item.getValue() }}
-							</template>
-							<template [ngIf]="!item.hasValue()">
+							</ng-template>
+							<ng-template [ngIf]="!item.hasValue()">
 								<span class="infinity-table-cell-loading">{{ loadingMessage }}</span>
-							</template>
+							</ng-template>
 						</div>
 				</div>
 			</div>
