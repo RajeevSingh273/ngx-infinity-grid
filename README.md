@@ -38,7 +38,7 @@ class DataProvider {
   private buffer:string[] = [];
 
   constructor() {
-    for (let i = 0; i < 100000; i++) {
+    for (let i = 0; i < 1000000; i++) {
       this.buffer[i] = 'test-' + i;
     }
   }
