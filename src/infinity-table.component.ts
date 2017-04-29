@@ -112,7 +112,7 @@ export class InfinityTable implements OnInit, OnChanges {
 
 	constructor(private el: ElementRef,
 	            private renderer: Renderer2,
-	            @Inject(InfinityDataSource) dataSourceCtor: {new():InfinityDataSource<any>},
+	            @Inject(InfinityDataSource) dataSourceCtor: Function,
 	            @Inject(INFINITY_GRID_DEBUG_ENABLED) private debugEnabled: boolean) {
 		this.dataSource = Reflect.construct(dataSourceCtor, [debugEnabled]);
 	}
