@@ -10,7 +10,8 @@
 		</div>
 	</div>
 	<div style="position: relative; height: 60%; min-height: 40px; width: 60%; margin: 0 auto;">
-		<InfinityGrid [dataSource]="dataSource">
+		<InfinityGrid [pageData]="pageData"
+		              (fetchPage)="onFetchPage($event)">
 		</InfinityGrid>
 	</div>
 	<div style="position: relative; height: 20%;">
