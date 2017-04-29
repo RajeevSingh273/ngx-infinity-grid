@@ -1,17 +1,21 @@
 import {
 	ModuleWithProviders,
 	NgModule
-} from "@angular/core";
+} from '@angular/core';
 
-import {CommonModule} from "@angular/common";
+import {CommonModule} from '@angular/common';
 
-import {InfinityGrid} from "./infinity-grid.component";
-import {InfinityTable} from "./infinity-table.component";
+import {InfinityGrid} from './infinity-grid.component';
+import {InfinityTable} from './infinity-table.component';
 import {
-	InfinityDataSourceFactory,
-	DefaultInfinityDataSourceFactory
-} from "./infinity-data-source.service";
-import {INFINITY_GRID_DEBUG_ENABLED, InfinityGridSettings} from "./infinity-grid.settings";
+	InfinityDataSource,
+	DefaultInfinityDataSource
+} from './infinity-data-source.service';
+
+import {
+	INFINITY_GRID_DEBUG_ENABLED,
+	InfinityGridSettings
+} from './infinity-grid.settings';
 
 @NgModule({
 	imports: [
@@ -37,7 +41,7 @@ export class InfinityGridModule {
 			ngModule: InfinityGridModule,
 			providers: [
 				{provide: INFINITY_GRID_DEBUG_ENABLED, useValue: localConfig.debugEnabled},
-				{provide: InfinityDataSourceFactory, useClass: DefaultInfinityDataSourceFactory}
+				{provide: InfinityDataSource, useValue: DefaultInfinityDataSource}
 			]
 		};
 	}

@@ -1,56 +1,23 @@
-import {
-	Injectable,
-	Inject
-} from "@angular/core";
-
-import {INFINITY_GRID_DEBUG_ENABLED} from "./infinity-grid.settings";
-
-export interface InfinityData<T> {
-	fullSize: number;
-	data: T[];
+export interface InfinityPage {
+	startIndex: number;
+	endIndex: number;
+	isReady: boolean;
 }
 
-export interface InfinityDataProvider<T> {
-	fetch(startIndex: number, endIndex: number): Promise<InfinityData<T>>;
+export interface InfinityPageData<T> {
+	startIndex: number;
+	endIndex?: number;
+	totalLength?: number;
+	rawData?: T[];
 }
 
-export interface InfinityDataSource<T> {
-	getFullSize(): number;
-	isFetched(startIndex: number, endIndex: number): boolean;
-	fetch(startIndex: number, endIndex: number): Promise<void>;
+export abstract class InfinityDataSource<T> {
+	abstract getTotalLength(): number;
+	abstract isPageReady(startIndex: number, endIndex: number): boolean;
+	abstract setPageData(page: InfinityPageData<T>);
 }
 
-interface IDataSourceRowFactory<T> {
-	getInstance(index: number, firstIndex: number): IDataSourceRow<T>;
-}
-
-export interface IInfinityDataSourceFactory {
-	getInstance<T>(_dataProvider: InfinityDataProvider<T>): InfinityDataSource<T>;
-}
-
-export abstract class InfinityDataSourceFactory implements IInfinityDataSourceFactory {
-	abstract getInstance<T>(_dataProvider: InfinityDataProvider<T>): InfinityDataSource<T>;
-}
-
-@Injectable()
-export class DefaultInfinityDataSourceFactory extends InfinityDataSourceFactory {
-
-	constructor(@Inject(INFINITY_GRID_DEBUG_ENABLED) private debugEnabled: boolean) {
-		super();
-	}
-
-	/**
-	 * @override
-	 */
-	public getInstance<T>(_dataProvider: InfinityDataProvider<T>): InfinityDataSource<T> {
-		return new DefaultInfinityDataSource<T>(
-			_dataProvider,
-			this.debugEnabled
-		);
-	}
-}
-
-export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
+export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 
 	/**
 	 * ES6 iterators compatibility
@@ -62,14 +29,66 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 	private _startIndex: number = 0;
 	private _endIndex: number = 0;
 
-	constructor(private _dataProvider: InfinityDataProvider<T>,
-	            private debugEnabled: boolean) {
+	constructor(private debugEnabled: boolean) {
+		super();
 	}
 
 	/**
 	 * @override
 	 */
-	public getFullSize(): number {
+	public setPageData(pageData: InfinityPageData<T>) {
+		this._startIndex = pageData.startIndex;
+
+		if (typeof pageData.endIndex !== 'undefined') {
+			/**
+			 * We must show the loading of rows.
+			 * This section should be executed before fetch of the remote data
+			 */
+			this._endIndex = pageData.endIndex;
+
+			if (this.debugEnabled) {
+				console.debug('[$DefaultInfinityDataSource] The page has been applied. Start index is', this._startIndex,
+					', end index is', this._endIndex
+				);
+			}
+		} else {
+			/**
+			 * This section should be executed when fetch of the remote data has been succeeded
+			 */
+			this._endIndex = pageData.startIndex + pageData.rawData.length - 1;
+
+			const infinityDataTotalLength: number = pageData.totalLength;
+
+			if (!this._dataBuffer) {
+				this._dataBuffer = new Array<T>(infinityDataTotalLength);
+			} else if (infinityDataTotalLength !== this._dataBuffer.length) {
+				const dataBufferLength: number = this._dataBuffer.length;
+
+				if (infinityDataTotalLength > dataBufferLength) {
+					// Extend infinity buffer in runtime
+					this._dataBuffer = this._dataBuffer.concat(new Array<T>(infinityDataTotalLength - dataBufferLength));
+				} else {
+					this._dataBuffer = this._dataBuffer.slice(0, infinityDataTotalLength);
+				}
+			}
+
+			let currentIndex: number = this._startIndex;
+			pageData.rawData.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
+
+			if (this.debugEnabled) {
+				console.debug('[$DefaultInfinityDataSource] The page data have been applied. The current snapshot size is',
+					this.getReadyDataSize(),
+					', start index is', this._startIndex,
+					', end index is', this._endIndex
+				);
+			}
+		}
+	}
+
+	/**
+	 * @override
+	 */
+	public getTotalLength(): number {
 		return this._dataBuffer ? this._dataBuffer.length : 0;
 	}
 
@@ -83,52 +102,7 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 	/**
 	 * @override
 	 */
-	public fetch(startIndex: number, endIndex: number): Promise<void> {
-		this._startIndex = startIndex;
-		this._endIndex = endIndex;
-
-		if (this.debugEnabled) {
-			console.debug('[$DefaultInfinityDataSource] The data have been fetched. Start index is',
-				startIndex, ', end index is', endIndex);
-		}
-
-		if (this.isFetched(startIndex, endIndex)) {
-			return Promise.resolve();
-		}
-
-		return this._dataProvider.fetch(startIndex, endIndex)
-			.then((infinityData: InfinityData<T>) => this.onFetch(startIndex, endIndex, infinityData));
-	}
-
-	private onFetch(startIndex: number, endIndex: number, infinityData: InfinityData<T>) {
-		const infinityFullSize: number = infinityData.fullSize;
-
-		if (!this._dataBuffer) {
-			this._dataBuffer = new Array<T>(infinityFullSize);
-		} else if (infinityFullSize !== this._dataBuffer.length) {
-			const dataBufferLength: number = this._dataBuffer.length;
-
-			if (infinityFullSize > dataBufferLength) {
-				// Extend infinity buffer in runtime
-				this._dataBuffer = this._dataBuffer.concat(new Array<T>(infinityFullSize - dataBufferLength));
-			} else {
-				this._dataBuffer = this._dataBuffer.slice(0, infinityFullSize);
-			}
-		}
-
-		let currentIndex: number = startIndex;
-		infinityData.data.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
-
-		if (this.debugEnabled) {
-			console.debug('[$DefaultInfinityDataSource] The data have been fetched. The current data size snapshot is',
-				this.getFetchedDataSize());
-		}
-	}
-
-	/**
-	 * @override
-	 */
-	public isFetched(startIndex: number, endIndex: number): boolean {
+	public isPageReady(startIndex: number, endIndex: number): boolean {
 		if (!this._dataBuffer) {
 			return false;
 		}
@@ -140,7 +114,7 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 		return isFilled;
 	}
 
-	private getFetchedDataSize(): number {
+	private getReadyDataSize(): number {
 		if (!this._dataBuffer) {
 			return 0;
 		}
@@ -168,6 +142,10 @@ export class DefaultInfinityDataSource<T> implements InfinityDataSource<T> {
 			}
 		);
 	}
+}
+
+interface IDataSourceRowFactory<T> {
+	getInstance(index: number, firstIndex: number): IDataSourceRow<T>;
 }
 
 class DefaultIterator<T> implements Iterator<IDataSourceRow<T>> {

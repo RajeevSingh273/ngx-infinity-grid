@@ -1,10 +1,15 @@
 import {
 	ViewEncapsulation,
 	Component,
-	Input
-} from "@angular/core";
+	Input,
+	EventEmitter,
+	Output
+} from '@angular/core';
 
-import {InfinityDataSource} from "./infinity-data-source.service";
+import {
+	InfinityPage,
+	InfinityPageData
+} from './infinity-data-source.service';
 
 @Component({
 	selector: 'InfinityGrid',
@@ -19,7 +24,8 @@ import {InfinityDataSource} from "./infinity-data-source.service";
 			<div style="display: table-row; height: 100%;">
 				<div style="position: relative; width: 100%; height: 100%;">
 					<div style="position: absolute; width: 100%; height: 100%;">
-						<InfinityTable [dataSource]="dataSource">
+						<InfinityTable [pageData]="pageData"
+									   (fetchPage)="onFetchPage($event)">
 						</InfinityTable>
 					</div>
 				</div>
@@ -49,5 +55,13 @@ import {InfinityDataSource} from "./infinity-data-source.service";
 })
 export class InfinityGrid {
 
-	@Input() dataSource: InfinityDataSource<any>;
+	@Input() pageData: InfinityPageData<any>;
+	@Output() fetchPage: EventEmitter<InfinityPage> = new EventEmitter<InfinityPage>();
+
+	/**
+	 * @template
+	 */
+	private onFetchPage(infinityPage: InfinityPage) {
+		this.fetchPage.emit(infinityPage);
+	}
 }

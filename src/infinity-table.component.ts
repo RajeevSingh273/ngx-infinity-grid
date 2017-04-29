@@ -1,20 +1,26 @@
 import {
 	ElementRef,
 	Input,
+	Output,
 	HostListener,
 	Component,
 	OnInit,
+	OnChanges,
 	ViewEncapsulation,
 	Renderer2,
-	Inject
-} from "@angular/core";
+	Inject,
+	EventEmitter,
+	SimpleChanges
+} from '@angular/core';
 
 import {
 	InfinityDataSource,
-	IDataSourceRow
-} from "./infinity-data-source.service";
+	IDataSourceRow,
+	InfinityPage,
+	InfinityPageData
+} from './infinity-data-source.service';
 
-import {INFINITY_GRID_DEBUG_ENABLED} from "./infinity-grid.settings";
+import {INFINITY_GRID_DEBUG_ENABLED} from './infinity-grid.settings';
 
 @Component({
 	selector: 'InfinityTable',
@@ -79,7 +85,7 @@ import {INFINITY_GRID_DEBUG_ENABLED} from "./infinity-grid.settings";
 	],
 	encapsulation: ViewEncapsulation.None,
 })
-export class InfinityTable implements OnInit {
+export class InfinityTable implements OnInit, OnChanges {
 
 	private static SOUTH_PAGE_ZONE_SIZE: number = 1;
 	private static NORTH_PAGE_ZONE_SIZE: number = 1;
@@ -87,10 +93,11 @@ export class InfinityTable implements OnInit {
 	// http://stackoverflow.com/questions/28260889/set-large-value-to-divs-height
 	private static MAX_HEIGHTS_BY_BROWSER_RESTRICTION: number[] = [20000000, 17895696, 1533917];
 
-	@Input() dataSource: InfinityDataSource<any>;
+	@Input() pageData: InfinityPageData<any>;
 	@Input() loadingMessage: string;
 	@Input() preventLoadPageAfterViewInit: boolean;
 	@Input() delayOnChangeViewState: number;
+	@Output() fetchPage: EventEmitter<InfinityPage> = new EventEmitter<InfinityPage>(false);
 
 	private _scrollableContainerWrapper: HTMLElement;
 	private _scrollableContainer: HTMLElement;
@@ -101,16 +108,20 @@ export class InfinityTable implements OnInit {
 	private _selectedRowIndex: number;
 	private _needAdjustScrollableContainerHeight: boolean;  // Cached for optimization
 
+	private dataSource: InfinityDataSource<any>;
+
 	constructor(private el: ElementRef,
 	            private renderer: Renderer2,
+	            @Inject(InfinityDataSource) dataSourceCtor: {new():InfinityDataSource<any>},
 	            @Inject(INFINITY_GRID_DEBUG_ENABLED) private debugEnabled: boolean) {
+		this.dataSource = Reflect.construct(dataSourceCtor, [debugEnabled]);
 	}
 
 	/**
 	 * @override
 	 */
 	public ngOnInit() {
-		this.delayOnChangeViewState = this.delayOnChangeViewState || 100;
+		this.delayOnChangeViewState = this.delayOnChangeViewState || 50;
 		this.loadingMessage = this.loadingMessage || 'Loading...';
 		this.preventLoadPageAfterViewInit = this.preventLoadPageAfterViewInit || false;
 
@@ -121,8 +132,6 @@ export class InfinityTable implements OnInit {
 		const nullRow: HTMLElement = this._scrollableContainer.children[0] as HTMLElement;
 		this._rowHeight = nullRow.clientHeight;
 
-		this.refreshScrollableContainerHeight();
-
 		if (this.debugEnabled) {
 			console.debug('[$InfinityTable] The row height has been calculated automatically:', this._rowHeight);
 		}
@@ -131,9 +140,24 @@ export class InfinityTable implements OnInit {
 	/**
 	 * @override
 	 */
+	public ngOnChanges(changes: SimpleChanges) {
+		if (changes.pageData && this.pageData) {
+			this.dataSource.setPageData(this.pageData);
+
+			if (this.debugEnabled) {
+				console.debug('[$InfinityTable] The page data have been updated:', this.pageData);
+			}
+
+			this.refreshScrollableContainerHeight();
+		}
+	}
+
+	/**
+	 * @override
+	 */
 	public ngAfterViewInit() {
 		if (!this.preventLoadPageAfterViewInit) {
-			this.applyDataSourcePage();
+			this.applyNewPage();
 		}
 	}
 
@@ -167,24 +191,23 @@ export class InfinityTable implements OnInit {
 	}
 
 	private getStartEndIndexes(): number[] {
-		const dataSourceFullSize: number = this.dataSource.getFullSize();
+		const dataSourceTotalLength: number = this.dataSource.getTotalLength();
 		const scrollPosition: number = this._scrollableContainerWrapper.scrollTop;
 		const pageSize: number = this.getPageSize();
 		const scrollableContainerActualFullHeight: number = this.getScrollableContainerActualFullHeight();
 		const scrollableContainerWrapperFullHeight:number = this.getScrollableContainerWrapperFullHeight();
-		const lastDataSourceIndex: number = dataSourceFullSize - 1;
+		const lastDataSourceIndex: number = dataSourceTotalLength - 1;
 
 		let startIndex: number = Math.floor(scrollPosition / this.getAdjustedRowHeight());
 		let endIndex: number = startIndex + pageSize - 1;
 
-		if (dataSourceFullSize > 0) {
+		if (dataSourceTotalLength > 0) {
 			endIndex = Math.min(endIndex, lastDataSourceIndex);
 		}
 
-		let scrollPositionDiff: number = -1;
 		if (this._needAdjustScrollableContainerHeight
 			&& scrollPosition > 0
-			&& ((scrollPositionDiff = scrollableContainerActualFullHeight - scrollPosition) === scrollableContainerWrapperFullHeight)) {
+			&& ((scrollableContainerActualFullHeight - scrollPosition) === scrollableContainerWrapperFullHeight)) {
 
 			/**
 			 * This is the last page and we must adjust the indexes because browser restrictions
@@ -204,21 +227,20 @@ export class InfinityTable implements OnInit {
 				', scrollPosition is', scrollPosition,
 				', pageSize is', pageSize,
 				', scrollableContainerActualFullHeight is', scrollableContainerActualFullHeight,
-				', scrollPositionDiff is', scrollPositionDiff,
 				', scrollableContainerWrapperFullHeight is', scrollableContainerWrapperFullHeight);
 		}
 
 		return [startIndex, endIndex];
 	}
 
-	private launchUpdateView() {
+	private refreshView() {
 		if (this._loadTask) {
 			clearTimeout(this._loadTask);
 			this._loadTask = null;
 		}
 
-		if (this.isDataSourcePageReady()) {
-			this.applyDataSourcePage();
+		if (this.isPageReady()) {
+			this.applyNewPage();
 
 			if (this.debugEnabled) {
 				console.debug('[$InfinityTable] The data source page has been applied immediately');
@@ -227,7 +249,7 @@ export class InfinityTable implements OnInit {
 		}
 
 		this._loadTask = setTimeout(() => {
-			this.applyDataSourcePage();
+			this.applyNewPage();
 
 			if (this.debugEnabled) {
 				console.debug('[$InfinityTable] The data source page has been applied');
@@ -238,7 +260,7 @@ export class InfinityTable implements OnInit {
 	}
 
 	private getDataSourceFullSize(): number {
-		return this.dataSource.getFullSize();
+		return this.dataSource.getTotalLength();
 	}
 
 	private getPageSize(): number {
@@ -314,31 +336,39 @@ export class InfinityTable implements OnInit {
 	 */
 	private getScrollableContainerFullHeight(): number {
 		return Math.max(
-			this.dataSource.getFullSize() * this._rowHeight,
+			this.dataSource.getTotalLength() * this._rowHeight,
 			this.getScrollableContainerWrapperFullHeight()
 		);
 	}
 
-	private isDataSourcePageReady(): boolean {
+	private isPageReady(): boolean {
 		const indexes: number[] = this.getStartEndIndexes();
-		return this.dataSource.isFetched(indexes[0], indexes[1]);
+		return this.dataSource.isPageReady(indexes[0], indexes[1]);
 	}
 
-	private applyDataSourcePage(): Promise<void> {
+	private applyNewPage() {
 		const indexes: number[] = this.getStartEndIndexes();
+		const startIndex: number = indexes[0];
+		const endIndex: number = indexes[1];
 
-		return this.dataSource.fetch(indexes[0], indexes[1])
-			.then(() => this.refreshScrollableContainerHeight());
+		const infinityPage: InfinityPage = {
+			startIndex: startIndex,
+			endIndex: endIndex,
+			isReady: this.dataSource.isPageReady(startIndex, endIndex)
+		};
+
+		// Flux-cycle starting here
+		this.fetchPage.emit(infinityPage);
 	}
 
 	@HostListener('scroll', ['$event'])
-	private onScroll(event: Event) {
-		this.launchUpdateView();
+	private onScroll() {
+		this.refreshView();
 	}
 
 	@HostListener('window:resize')
 	private resizeHandler() {
-		this.launchUpdateView();
+		this.refreshView();
 	}
 }
 
