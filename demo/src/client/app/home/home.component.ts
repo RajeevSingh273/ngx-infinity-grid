@@ -21,6 +21,9 @@ export class HomeComponent {
 	}
 
 	private loadData() {
+
+		// / Flux action should be started here
+		// Local pageData object should be updated during Flux-lifecycle
 		// Start loading manually
 		this.pageData = {};
 	}

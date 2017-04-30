@@ -168,6 +168,7 @@ export class InfinityTable implements OnInit, OnChanges {
 
 				// When the user launches first loading manually
 				this._scrollableContainerWrapper.scrollTop = 0;
+				this._selectedRowIndex = null;
 				this.dataSource.clearAll();
 
 				this.applyNewPage();
