@@ -29,20 +29,26 @@ import {INFINITY_GRID_DEBUG_ENABLED} from './infinity-grid.settings';
 				<div class="infinity-table-row infinity-table-null-row">
 					<div class="infinity-table-cell" style="width: 100px;">&nbsp;</div>
 				</div>
-				<div class="infinity-table-row"
-					*ngFor="let item of dataSource" 
-					(click)="onRowClick(item)"
-					[ngClass]="{selected: isRowSelected(item)}"
-					[ngStyle]="{top: buildTopItem(item) + 'px'}">
-						<div class="infinity-table-cell" style="width: 100px;">
-							<ng-template [ngIf]="item.hasValue()">
-								{{ item.getValue() }}
-							</ng-template>
-							<ng-template [ngIf]="!item.hasValue()">
-								<span class="infinity-table-cell-loading">{{ loadingMessage }}</span>
-							</ng-template>
-						</div>
-				</div>
+				<ng-template [ngIf]="!bodyMessage">
+					<div class="infinity-table-row"
+						*ngFor="let item of dataSource"
+						(click)="onRowClick(item)"
+						[ngClass]="{selected: isRowSelected(item)}"
+						[ngStyle]="{top: buildTopItem(item) + 'px'}">
+							<div class="infinity-table-cell" style="width: 100px;">
+								<ng-template [ngIf]="item.hasValue()">
+									{{ item.getValue() }}
+								</ng-template>
+								<ng-template [ngIf]="!item.hasValue()">
+									<span class="infinity-table-cell-loading">{{ loadingMessage }}</span>
+								</ng-template>
+							</div>
+					</div>
+				</ng-template>
+			</div>
+			<div class="infinity-table-message" 
+				*ngIf="bodyMessage">
+				<div class="infinity-table-message-inner">{{ bodyMessage }}</div>
 			</div>
 		`,
 	styles: [
@@ -81,6 +87,17 @@ import {INFINITY_GRID_DEBUG_ENABLED} from './infinity-grid.settings';
 			    border-bottom: 1px transparent;
 			    padding: 4px;
 			}
+			
+			.infinity-table-message {
+			    position: absolute;
+			    left: 50%;
+			    top: 50%;
+			}
+			
+			.infinity-table-message .infinity-table-message-inner {
+			    position: relative;
+			    left: -50%;
+			}
 		`
 	],
 	encapsulation: ViewEncapsulation.None,
@@ -95,6 +112,7 @@ export class InfinityTable implements OnInit, OnChanges {
 
 	@Input() pageData: InfinityPageData<any>;
 	@Input() loadingMessage: string;
+	@Input() emptyMessage: string;
 	@Input() preventLoadPageAfterViewInit: boolean;
 	@Input() delayOnChangeViewState: number;
 	@Output() fetchPage: EventEmitter<InfinityPage> = new EventEmitter<InfinityPage>(false);
@@ -108,6 +126,7 @@ export class InfinityTable implements OnInit, OnChanges {
 	private _selectedRowIndex: number;
 	private _needAdjustScrollableContainerHeight: boolean;  // Cached for optimization
 
+	private bodyMessage: string;
 	private dataSource: InfinityDataSource<any>;
 
 	constructor(private el: ElementRef,
@@ -123,6 +142,7 @@ export class InfinityTable implements OnInit, OnChanges {
 	public ngOnInit() {
 		this.delayOnChangeViewState = this.delayOnChangeViewState || 50;
 		this.loadingMessage = this.loadingMessage || 'Loading...';
+		this.emptyMessage = this.emptyMessage || 'Nothing is loaded';
 		this.preventLoadPageAfterViewInit = this.preventLoadPageAfterViewInit || false;
 
 		this._scrollableContainerWrapper = this.el.nativeElement;
@@ -135,6 +155,8 @@ export class InfinityTable implements OnInit, OnChanges {
 		if (this.debugEnabled) {
 			console.debug('[$InfinityTable] The row height has been calculated automatically:', this._rowHeight);
 		}
+
+		this.bodyMessage = this.emptyMessage;
 	}
 
 	/**
@@ -142,13 +164,25 @@ export class InfinityTable implements OnInit, OnChanges {
 	 */
 	public ngOnChanges(changes: SimpleChanges) {
 		if (changes.pageData && this.pageData) {
-			this.dataSource.setPageData(this.pageData);
+			if (Object.keys(this.pageData).length === 0) {
 
-			if (this.debugEnabled) {
-				console.debug('[$InfinityTable] The page data have been updated:', this.pageData);
+				// When the user launches first loading manually
+				this._scrollableContainerWrapper.scrollTop = 0;
+				this.dataSource.clearAll();
+
+				this.applyNewPage();
+			} else {
+				if (this.pageData.rawData) {
+					this.bodyMessage = null;
+				}
+
+				this.dataSource.setPageData(this.pageData);
+
+				if (this.debugEnabled) {
+					console.debug('[$InfinityTable] The page data have been updated:', this.pageData);
+				}
+				this.refreshScrollableContainerHeight();
 			}
-
-			this.refreshScrollableContainerHeight();
 		}
 	}
 
@@ -357,7 +391,11 @@ export class InfinityTable implements OnInit, OnChanges {
 			isReady: this.dataSource.isPageReady(startIndex, endIndex)
 		};
 
-		// Flux-cycle starting here
+		if (this.dataSource.getTotalLength() === 0) {
+			this.bodyMessage = this.loadingMessage;
+		}
+
+		// Flux-cycle is started here
 		this.fetchPage.emit(infinityPage);
 	}
 

@@ -5,7 +5,7 @@ export interface InfinityPage {
 }
 
 export interface InfinityPageData<T> {
-	startIndex: number;
+	startIndex?: number;
 	endIndex?: number;
 	totalLength?: number;
 	rawData?: T[];
@@ -15,6 +15,7 @@ export abstract class InfinityDataSource<T> {
 	abstract getTotalLength(): number;
 	abstract isPageReady(startIndex: number, endIndex: number): boolean;
 	abstract setPageData(page: InfinityPageData<T>);
+	abstract clearAll();
 }
 
 export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
@@ -31,6 +32,13 @@ export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 
 	constructor(private debugEnabled: boolean) {
 		super();
+	}
+
+	/**
+	 * @override
+	 */
+	public clearAll() {
+		this._dataBuffer = null;
 	}
 
 	/**

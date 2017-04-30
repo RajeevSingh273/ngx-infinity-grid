@@ -25,6 +25,9 @@ import {
 				<div style="position: relative; width: 100%; height: 100%;">
 					<div style="position: absolute; width: 100%; height: 100%;">
 						<InfinityTable [pageData]="pageData"
+									   [loadingMessage]="loadingMessage"
+									   [emptyMessage]="emptyMessage"
+									   [preventLoadPageAfterViewInit]="preventLoadPageAfterViewInit"
 									   (fetchPage)="onFetchPage($event)">
 						</InfinityTable>
 					</div>
@@ -55,7 +58,11 @@ import {
 })
 export class InfinityGrid {
 
+	@Input() loadingMessage: string;
+	@Input() emptyMessage: string;
 	@Input() pageData: InfinityPageData<any>;
+	@Input() preventLoadPageAfterViewInit: boolean;
+
 	@Output() fetchPage: EventEmitter<InfinityPage> = new EventEmitter<InfinityPage>();
 
 	/**
