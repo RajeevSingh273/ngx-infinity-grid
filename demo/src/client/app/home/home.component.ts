@@ -20,19 +20,22 @@ export class HomeComponent {
 		this.dataProvider = new DataProvider();  // Inject your data provider here
 	}
 
-	private loadData() {
+	private clearData() {
+		// Case #1 - initial state
+		// Flux action should be started here. Local pageData object should be updated during Flux-lifecycle
+		this.pageData = null;
+	}
 
-		// / Flux action should be started here
-		// Local pageData object should be updated during Flux-lifecycle
-		// Start loading manually
+	private loadData() {
+		// Case #2
+		// Flux action should be started here. Local pageData object should be updated during Flux-lifecycle
 		this.pageData = {};
 	}
 
 	private onFetchPage(page: InfinityPage) {
-
-		// Flux action should be started here
-		// Local pageData object should be updated during Flux-lifecycle
-		// When long asynchronous request has been started, we should show loading rows in grid
+		// Case #3
+		// Flux action should be started here. Local pageData object should be updated during Flux-lifecycle
+		// When long asynchronous request has been started so we should show loading rows in grid
 		this.pageData = {
 			startIndex: page.startIndex,
 			endIndex: page.endIndex
@@ -42,10 +45,10 @@ export class HomeComponent {
 			this.dataProvider.fetch(page)
 				.then((pageData: InfinityPageData<string>) => {
 					if (pageData.startIndex === this.pageData.startIndex) {
-						// The promise is not cancellable
-						// https://github.com/tc39/proposal-cancelable-promises
-						// We should check the current and previous indexes
 
+						// Case #4
+						// The promise is not cancellable [https://github.com/tc39/proposal-cancelable-promises]
+						// We should check the current index
 						this.pageData = pageData;
 					}
 				});
