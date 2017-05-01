@@ -142,7 +142,7 @@ export class InfinityTable implements OnInit, OnChanges {
 	public ngOnInit() {
 		this.delayOnChangeViewState = this.delayOnChangeViewState || 50;
 		this.loadingMessage = this.loadingMessage || 'Loading...';
-		this.emptyMessage = this.emptyMessage || 'Nothing is loaded';
+		this.bodyMessage = this.emptyMessage = this.emptyMessage || 'Nothing is loaded';
 		this.preventLoadPageAfterViewInit = this.preventLoadPageAfterViewInit || false;
 
 		this._scrollableContainerWrapper = this.el.nativeElement;
@@ -155,34 +155,37 @@ export class InfinityTable implements OnInit, OnChanges {
 		if (this.debugEnabled) {
 			console.debug('[$InfinityTable] The row height has been calculated automatically:', this._rowHeight);
 		}
-
-		this.bodyMessage = this.emptyMessage;
 	}
 
 	/**
 	 * @override
 	 */
 	public ngOnChanges(changes: SimpleChanges) {
-		if (changes.pageData && this.pageData) {
-			if (Object.keys(this.pageData).length === 0) {
+		if (changes.pageData) {
+			if (this.pageData) {
+				if (Object.keys(this.pageData).length === 0) {
+					// Case #2. When the user launches first loading manually: this.pageData = {};
 
-				// When the user launches first loading manually
-				this._scrollableContainerWrapper.scrollTop = 0;
-				this._selectedRowIndex = null;
-				this.dataSource.clearAll();
+					this.resetLocalState();
+					this.applyNewPage();
+					this.applyLoadingMessage();
+				} else {
+					// Case #3..#4
+					this.dataSource.setPageData(this.pageData);
+					if (this.debugEnabled) {
+						console.debug('[$InfinityTable] The page data have been updated. The current page data is', this.pageData);
+					}
 
-				this.applyNewPage();
-			} else {
-				if (this.pageData.rawData) {
-					this.bodyMessage = null;
+					this.clearMessage();
+					this.refreshScrollableContainerHeight();
 				}
-
-				this.dataSource.setPageData(this.pageData);
+			} else {
+				// Case #1. Apply initial state: this.pageData = null;
+				this.resetLocalState();
 
 				if (this.debugEnabled) {
-					console.debug('[$InfinityTable] The page data have been updated:', this.pageData);
+					console.debug('[$InfinityTable] The component has been successfully reset');
 				}
-				this.refreshScrollableContainerHeight();
 			}
 		}
 	}
@@ -222,6 +225,17 @@ export class InfinityTable implements OnInit, OnChanges {
 		} else {
 			const topStartPosition: number = item.getFirstPosition() * this.getAdjustedRowHeight();
 			return topStartPosition + this._rowHeight * (item.getPosition() - item.getFirstPosition());
+		}
+	}
+
+	private resetLocalState() {
+		this.dataSource.clearAll();
+
+		this._selectedRowIndex = null;
+		this.bodyMessage = this.emptyMessage;
+
+		if (this._scrollableContainer) {
+			this.setScrollableContainerHeight(0);
 		}
 	}
 
@@ -323,13 +337,17 @@ export class InfinityTable implements OnInit, OnChanges {
 		return this._scrollableContainerWrapper.clientHeight;
 	}
 
+	private setScrollableContainerHeight(height: number) {
+		this.renderer.setStyle(this._scrollableContainer, 'height', height + 'px');
+	}
+
 	private refreshScrollableContainerHeight(): void {
 		this._adjustedRowHeight = null;                         // reset the cached value
 		this._adjustedRowHeightFactor = null;                   // reset the cached value
 		this._needAdjustScrollableContainerHeight = false;      // reset the cached value
 
 		const scrollableContainerFullHeight: number = this.getScrollableContainerFullHeight();
-		this.renderer.setStyle(this._scrollableContainer, 'height', scrollableContainerFullHeight + 'px');
+		this.setScrollableContainerHeight(scrollableContainerFullHeight);
 
 		if (!this.isValidScrollableContainerActualFullHeight(scrollableContainerFullHeight)) {
 			// Browser has been failed to set height
@@ -340,16 +358,16 @@ export class InfinityTable implements OnInit, OnChanges {
 				console.debug('[$InfinityTable] Browser has been failed to set height', scrollableContainerFullHeight);
 			}
 
-			for (let restrictionHeight of InfinityTable.MAX_HEIGHTS_BY_BROWSER_RESTRICTION) {
-				this.renderer.setStyle(this._scrollableContainer, 'height', restrictionHeight + 'px');
+			for (let restrictedHeight of InfinityTable.MAX_HEIGHTS_BY_BROWSER_RESTRICTION) {
+				this.setScrollableContainerHeight(restrictedHeight);
 
-				if (!this.isValidScrollableContainerActualFullHeight(restrictionHeight)) {
+				if (!this.isValidScrollableContainerActualFullHeight(restrictedHeight)) {
 					if (this.debugEnabled) {
-						console.debug('[$InfinityTable] Browser has been failed to set restriction height', restrictionHeight);
+						console.debug('[$InfinityTable] Browser has been failed to set restricted height', restrictedHeight);
 					}
 				} else {
 					if (this.debugEnabled) {
-						console.debug('[$InfinityTable] Browser has been succeeded to set restriction height', restrictionHeight);
+						console.debug('[$InfinityTable] Browser has been succeeded to set restricted height', restrictedHeight);
 					}
 					break;
 				}
@@ -381,6 +399,14 @@ export class InfinityTable implements OnInit, OnChanges {
 		return this.dataSource.isPageReady(indexes[0], indexes[1]);
 	}
 
+	private applyLoadingMessage() {
+		this.bodyMessage = this.loadingMessage;
+	}
+
+	private clearMessage() {
+		this.bodyMessage = null;
+	}
+
 	private applyNewPage() {
 		const indexes: number[] = this.getStartEndIndexes();
 		const startIndex: number = indexes[0];
@@ -392,22 +418,26 @@ export class InfinityTable implements OnInit, OnChanges {
 			isReady: this.dataSource.isPageReady(startIndex, endIndex)
 		};
 
-		if (this.dataSource.getTotalLength() === 0) {
-			this.bodyMessage = this.loadingMessage;
-		}
-
 		// Flux-cycle is started here
 		this.fetchPage.emit(infinityPage);
 	}
 
+	private isDataSourceEmpty(): boolean {
+		return this.dataSource.getTotalLength() === 0;
+	}
+
 	@HostListener('scroll', ['$event'])
 	private onScroll() {
-		this.refreshView();
+		if (!this.isDataSourceEmpty()) { // Prevent execution when Case #1 is being applied
+			this.refreshView();
+		}
 	}
 
 	@HostListener('window:resize')
 	private resizeHandler() {
-		this.refreshView();
+		if (!this.isDataSourceEmpty()) {
+			this.refreshView();
+		}
 	}
 }
 

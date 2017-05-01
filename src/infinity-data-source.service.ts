@@ -27,8 +27,8 @@ export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 	[Symbol.iterator] = this.iterator();
 
 	private _dataBuffer: T[];
-	private _startIndex: number = 0;
-	private _endIndex: number = 0;
+	private _startIndex: number;
+	private _endIndex: number;
 
 	constructor(private debugEnabled: boolean) {
 		super();
@@ -39,6 +39,8 @@ export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 	 */
 	public clearAll() {
 		this._dataBuffer = null;
+		this._startIndex = null;
+		this._endIndex = null;
 	}
 
 	/**
@@ -47,11 +49,11 @@ export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 	public setPageData(pageData: InfinityPageData<T>) {
 		this._startIndex = pageData.startIndex;
 
-		if (typeof pageData.endIndex !== 'undefined') {
-			/**
-			 * We must show the loading of rows.
-			 * This section should be executed before fetch of the remote data
-			 */
+		if (Object.keys(pageData).length === 2 &&
+			typeof pageData.startIndex !== 'undefined' &&
+			typeof pageData.endIndex !== 'undefined') {
+
+			// Case #3. This section should be executed before fetch of the remote data because we must show the loading of rows
 			this._endIndex = pageData.endIndex;
 
 			if (this.debugEnabled) {
@@ -60,28 +62,10 @@ export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 				);
 			}
 		} else {
-			/**
-			 * This section should be executed when fetch of the remote data has been succeeded
-			 */
+			// Case #4. This section should be executed when fetch of the remote data has been succeeded
 			this._endIndex = pageData.startIndex + pageData.rawData.length - 1;
 
-			const infinityDataTotalLength: number = pageData.totalLength;
-
-			if (!this._dataBuffer) {
-				this._dataBuffer = new Array<T>(infinityDataTotalLength);
-			} else if (infinityDataTotalLength !== this._dataBuffer.length) {
-				const dataBufferLength: number = this._dataBuffer.length;
-
-				if (infinityDataTotalLength > dataBufferLength) {
-					// Extend infinity buffer in runtime
-					this._dataBuffer = this._dataBuffer.concat(new Array<T>(infinityDataTotalLength - dataBufferLength));
-				} else {
-					this._dataBuffer = this._dataBuffer.slice(0, infinityDataTotalLength);
-				}
-			}
-
-			let currentIndex: number = this._startIndex;
-			pageData.rawData.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
+			this.refreshBuffer(pageData);
 
 			if (this.debugEnabled) {
 				console.debug('[$DefaultInfinityDataSource] The page data have been applied. The current snapshot size is',
@@ -120,6 +104,33 @@ export class DefaultInfinityDataSource<T> extends InfinityDataSource<T> {
 			isFilled = isFilled && typeof this._dataBuffer[index] !== 'undefined';
 		}
 		return isFilled;
+	}
+
+	private refreshBuffer(pageData: InfinityPageData<T>) {
+		this.makeBuffer(pageData);
+		this.fillBuffer(pageData);
+	}
+
+	private fillBuffer(pageData: InfinityPageData<T>) {
+		let currentIndex: number = pageData.startIndex;
+		pageData.rawData.forEach((value: T) => this._dataBuffer[currentIndex++] = value);
+	}
+
+	private makeBuffer(pageData: InfinityPageData<T>) {
+		const bufferSize: number = pageData.totalLength;
+
+		if (!this._dataBuffer) {
+			this._dataBuffer = new Array<T>(bufferSize);
+		} else if (bufferSize !== this._dataBuffer.length) {
+			const dataBufferLength: number = this._dataBuffer.length;
+
+			if (bufferSize > dataBufferLength) {
+				// Extend infinity buffer in runtime
+				this._dataBuffer = this._dataBuffer.concat(new Array<T>(bufferSize - dataBufferLength));
+			} else {
+				this._dataBuffer = this._dataBuffer.slice(0, bufferSize);
+			}
+		}
 	}
 
 	private getReadyDataSize(): number {
